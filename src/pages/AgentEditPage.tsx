@@ -113,6 +113,7 @@ export default function AgentEditPage() {
   // Output schema
   const [outputSchemaJson, setOutputSchemaJson] = useState<string>("");
   const [outputSchemaError, setOutputSchemaError] = useState<string | null>(null);
+  const [showOutputEditor, setShowOutputEditor] = useState(false);
 
   useEffect(() => {
     if (!projectId) return;
@@ -733,34 +734,89 @@ export default function AgentEditPage() {
 
         {/* ─── Output Schema (JSON Schema) ─── */}
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <FileJson size={14} className="text-muted" />
-            <label className="text-sm text-muted font-medium">
-              Output Schema (JSON Schema)
-            </label>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <FileJson size={14} className="text-muted" />
+              <label className="text-sm text-muted font-medium">
+                Output Schema (JSON Schema)
+              </label>
+            </div>
+            {!showOutputEditor && !outputSchemaJson.trim() && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowOutputEditor(true);
+                  setOutputSchemaError(null);
+                }}
+                className="flex items-center gap-1 text-xs text-accent hover:text-accent-hover transition-colors duration-150 cursor-pointer"
+              >
+                <Plus size={13} />
+                Define output schema
+              </button>
+            )}
+            {outputSchemaJson.trim() && !showOutputEditor && (
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowOutputEditor(true)}
+                  className="text-xs text-accent hover:text-accent-hover transition-colors duration-150 cursor-pointer"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setOutputSchemaJson("");
+                    setOutputSchemaError(null);
+                    setShowOutputEditor(false);
+                  }}
+                  className="text-xs text-destructive hover:text-destructive/80 transition-colors duration-150 cursor-pointer"
+                >
+                  Clear
+                </button>
+              </div>
+            )}
           </div>
           <p className="text-xs text-muted/70">
             Define a structured output schema. When set, the LLM will be
             forced to respond via tool-calling with valid JSON matching this
             schema. Leave empty for free-text output.
           </p>
-          <div className="relative">
-            <textarea
-              rows={5}
-              value={outputSchemaJson}
-              onChange={(e) => {
-                setOutputSchemaJson(e.target.value);
-                setOutputSchemaError(null);
-              }}
-              placeholder={`{\n  "type": "object",\n  "properties": {\n    "summary": { "type": "string" },\n    "confidence": { "type": "number" }\n  },\n  "required": ["summary"]\n}`}
-              className="w-full bg-elevated border border-border rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted/50 focus:outline-none focus:ring-2 focus:ring-accent/50 transition-all duration-150 resize-none font-mono"
-            />
-          </div>
-          {outputSchemaError && (
-            <p className="text-xs text-destructive flex items-center gap-1">
-              <Info size={12} />
-              {outputSchemaError}
-            </p>
+
+          {!showOutputEditor && outputSchemaJson.trim() && (
+            <pre className="bg-elevated border border-border rounded-md px-3 py-2 text-xs text-foreground font-mono overflow-x-auto whitespace-pre-wrap">
+              {outputSchemaJson}
+            </pre>
+          )}
+
+          {showOutputEditor && (
+            <div className="space-y-1 animate-fade-in">
+              <div className="relative">
+                <textarea
+                  rows={5}
+                  value={outputSchemaJson}
+                  onChange={(e) => {
+                    setOutputSchemaJson(e.target.value);
+                    setOutputSchemaError(null);
+                  }}
+                  placeholder={`{\n  "type": "object",\n  "properties": {\n    "summary": { "type": "string" },\n    "confidence": { "type": "number" }\n  },\n  "required": ["summary"]\n}`}
+                  className="w-full bg-elevated border border-border rounded-md px-3 py-2 text-sm text-foreground placeholder:text-muted/50 focus:outline-none focus:ring-2 focus:ring-accent/50 transition-all duration-150 resize-none font-mono"
+                />
+              </div>
+              {outputSchemaError && (
+                <p className="text-xs text-destructive flex items-center gap-1">
+                  <Info size={12} />
+                  {outputSchemaError}
+                </p>
+              )}
+              <button
+                type="button"
+                onClick={() => setShowOutputEditor(false)}
+                className="text-xs text-muted hover:text-foreground transition-colors duration-150 cursor-pointer"
+              >
+                Done editing
+              </button>
+            </div>
           )}
         </div>
 

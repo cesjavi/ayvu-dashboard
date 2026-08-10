@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Eye, EyeOff, Check, Loader2, Key, Trash2, Plus, Copy, X } from "lucide-react";
+import { Eye, EyeOff, Check, Loader2, Key, Trash2, Plus, Copy, X, Sparkles, Wand2 } from "lucide-react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../hooks/useAuth";
@@ -68,6 +68,15 @@ export default function SettingsPage() {
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [revokingKeyId, setRevokingKeyId] = useState<string | null>(null);
 
+  // Client prompt generator state
+  const [projects, setProjects] = useState<{ id: string; name: string; description: string }[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [promptLanguage, setPromptLanguage] = useState("TypeScript");
+  const [clientPrompt, setClientPrompt] = useState<string | null>(null);
+  const [generatingPrompt, setGeneratingPrompt] = useState(false);
+  const [promptError, setPromptError] = useState<string | null>(null);
+  const [copiedPrompt, setCopiedPrompt] = useState(false);
+
   const fetchWorkspaceKeys = async () => {
     if (!workspaceId) return;
     const { data: session } = await supabase.auth.getSession();
@@ -129,6 +138,15 @@ export default function SettingsPage() {
     })();
 
     fetchWorkspaceKeys();
+
+    // Fetch projects for the client prompt generator
+    supabase
+      .from("projects")
+      .select("id, name, description")
+      .eq("workspace_id", workspaceId)
+      .order("name")
+      .then(({ data }) => setProjects(data ?? []));
+
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaceId, user]);
 
@@ -287,6 +305,108 @@ export default function SettingsPage() {
 
   const handleCopyKey = async (key: string) => {
     await copyToClipboard(key);
+  };
+
+  const indentLines = (text: string, spaces: number): string =>
+    text
+      .split("\n")
+      .map((line) => " ".repeat(spaces) + line)
+      .join("\n");
+
+  const handleGenerateClientPrompt = async () => {
+    if (!workspaceId || !selectedProjectId) return;
+    setGeneratingPrompt(true);
+    setPromptError(null);
+    setClientPrompt(null);
+    setCopiedPrompt(false);
+
+    try {
+      const { data: project } = await supabase
+        .from("projects")
+        .select("id, name, description")
+        .eq("id", selectedProjectId)
+        .single();
+
+      const { data: agents } = await supabase
+        .from("agents")
+        .select("id, name, description, provider, model, input_schema, output_schema")
+        .eq("project_id", selectedProjectId)
+        .order("name");
+
+      if (!project) {
+        setPromptError("Project not found. It may have been deleted.");
+        setGeneratingPrompt(false);
+        return;
+      }
+
+      const baseUrl = `${SUPABASE_URL}/functions/v1/external-v1/api/v1`;
+
+      const agentBlocks = (agents ?? [])
+        .map((a) => {
+          const input = a.input_schema
+            ? JSON.stringify(a.input_schema, null, 2)
+            : "None (no required parameters)";
+          const output = a.output_schema
+            ? JSON.stringify(a.output_schema, null, 2)
+            : "Free text (no structured output schema)";
+          return [
+            `### ${a.name}${a.description ? ` — ${a.description}` : ""}`,
+            `- Agent ID: ${a.id}`,
+            `- Model: ${a.provider} / ${a.model}`,
+            `- Input schema:\n${indentLines(input, 2)}`,
+            `- Output schema:\n${indentLines(output, 2)}`,
+          ].join("\n");
+        })
+        .join("\n\n");
+
+      const prompt = `You are an expert ${promptLanguage} engineer. Write a complete, production-ready client for the Ayvu AI agent platform so I can trigger and consume AI agent cascade runs from my own application.
+
+## The platform
+Ayvu lets users define projects that contain multiple AI agents arranged in a dependency graph (a DAG). When a run is triggered, agents execute in dependency order and their outputs cascade down the graph. The platform exposes a REST API for external applications.
+
+## Project to integrate with
+- Name: ${project.name}
+- Description: ${project.description ?? "(none)"}
+- Project ID: ${project.id}
+
+## API contract
+- Base URL: ${baseUrl}
+- Authentication: every request must include a workspace API key in the Authorization header as a Bearer token (e.g. \`Authorization: Bearer sk_...\`). Keys are generated in the Ayvu dashboard under Settings → API Keys.
+- Query parameters: \`workspaceId\` (the workspace UUID) and \`projectId\` (${project.id}) are required on every request.
+
+### Endpoints
+1. \`GET /schema?workspaceId=...&projectId=...\` — Returns a JSON array of all agents in the project with their \`input_schema\` and \`output_schema\`.
+2. \`POST /runs\` with JSON body \`{ "workspaceId": "...", "projectId": "...", "parameters": { ... } }\` — Triggers a new run. Returns \`{ "runId": "<uuid>", "status": "queued" }\` immediately.
+3. \`GET /runs/<runId>?workspaceId=...&projectId=...\` — Polls for the result. Status goes \`queued → running → completed | failed\`. A completed response includes every agent's output, token usage, and timings.
+4. \`GET /agents/<agentId>/instructions?workspaceId=...&projectId=...\` — Returns per-agent usage instructions: input/output schemas, sample cURL commands, and a natural-language explanation of the flow.
+
+## Agents in this project
+${agentBlocks}
+
+## Deliverable
+Write the client in ${promptLanguage}. It should:
+1. Wrap all four endpoints with typed methods (\`getSchema\`, \`createRun\`, \`getRun\`, \`getAgentInstructions\`).
+2. Model each agent's input/output schemas as typed structures so callers get type safety when passing parameters and reading results.
+3. Support both one-shot triggering and a convenience \`runAndWait\` that polls until the run reaches \`completed\` or \`failed\`.
+4. Raise clear, typed errors when the API returns an error code (\`INVALID_API_KEY\`, \`PROJECT_NOT_FOUND\`, \`VALIDATION_ERROR\`, \`RUN_NOT_FOUND\`).
+5. Include a short usage example at the end.
+6. Avoid external runtime dependencies beyond a standard HTTP client and JSON parsing.
+
+Return the complete source code organized into files. If anything is ambiguous, state your assumptions and proceed with sensible defaults.`;
+
+      setClientPrompt(prompt);
+    } catch (err) {
+      setPromptError(err instanceof Error ? err.message : "Failed to generate prompt");
+    } finally {
+      setGeneratingPrompt(false);
+    }
+  };
+
+  const handleCopyPrompt = async () => {
+    if (!clientPrompt) return;
+    await copyToClipboard(clientPrompt);
+    setCopiedPrompt(true);
+    setTimeout(() => setCopiedPrompt(false), 1500);
   };
 
   const handleDeleteWorkspace = async () => {
@@ -540,6 +660,92 @@ export default function SettingsPage() {
             ))}
           </div>
         )}
+      </section>
+
+      {/* Client Prompt Generator Section */}
+      <section>
+        <div className="flex items-center gap-2 mb-4">
+          <Sparkles size={16} className="text-accent" />
+          <h2 className="text-sm font-medium text-foreground">Client Prompt Generator</h2>
+        </div>
+        <p className="text-sm text-muted mb-5">
+          Generate a ready-to-paste prompt for Claude or ChatGPT that instructs it
+          to write a client for one of your projects — including agent schemas,
+          endpoints, and authentication details.
+        </p>
+        <div className="bg-surface border border-border rounded-lg p-4 space-y-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="space-y-1">
+              <label htmlFor="client-project" className="block text-xs font-medium text-muted">
+                Project
+              </label>
+              <select
+                id="client-project"
+                value={selectedProjectId}
+                onChange={(e) => {
+                  setSelectedProjectId(e.target.value);
+                  setClientPrompt(null);
+                  setPromptError(null);
+                }}
+                className="w-full bg-elevated border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50 transition-all duration-150"
+              >
+                <option value="">Select a project…</option>
+                {projects.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="client-language" className="block text-xs font-medium text-muted">
+                Language
+              </label>
+              <select
+                id="client-language"
+                value={promptLanguage}
+                onChange={(e) => setPromptLanguage(e.target.value)}
+                className="w-full bg-elevated border border-border rounded-md px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/50 transition-all duration-150"
+              >
+                {["TypeScript", "Python", "Go", "Java", "Ruby", "cURL / shell scripts"].map((l) => (
+                  <option key={l} value={l}>{l}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+          <button
+            onClick={handleGenerateClientPrompt}
+            disabled={!selectedProjectId || generatingPrompt}
+            className="flex items-center gap-1.5 bg-accent hover:bg-accent-hover active:scale-97 text-white text-sm font-medium rounded-md px-4 py-2 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            {generatingPrompt ? (
+              <Loader2 size={14} className="animate-spin" />
+            ) : (
+              <Wand2 size={14} />
+            )}
+            {generatingPrompt ? "Generating…" : "Generate prompt"}
+          </button>
+          {promptError && (
+            <p className="text-xs text-destructive">{promptError}</p>
+          )}
+          {clientPrompt && (
+            <div className="relative animate-fade-in">
+              <div className="flex items-center justify-between mb-1">
+                <p className="text-xs font-medium text-muted uppercase tracking-wider">
+                  Copy this prompt and paste it into Claude or ChatGPT
+                </p>
+                <button
+                  onClick={handleCopyPrompt}
+                  className="flex items-center gap-1 text-xs text-accent hover:text-accent-hover transition-colors duration-150 cursor-pointer"
+                >
+                  {copiedPrompt ? <Check size={12} /> : <Copy size={12} />}
+                  {copiedPrompt ? "Copied" : "Copy"}
+                </button>
+              </div>
+              <pre className="bg-elevated border border-border rounded-md p-4 pr-12 font-mono text-xs text-foreground whitespace-pre-wrap overflow-x-auto max-h-96 overflow-y-auto">
+                {clientPrompt}
+              </pre>
+            </div>
+          )}
+        </div>
       </section>
 
       {/* Generate Key Modal */}
