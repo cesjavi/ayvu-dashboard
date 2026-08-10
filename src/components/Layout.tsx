@@ -47,7 +47,7 @@ export default function Layout() {
         {/* Workspace header */}
         <div className="h-14 flex items-center gap-2 px-4 border-b border-border">
           <img
-            src="/logoayvu.png"
+            src="/logoayvu.svg"
             alt="Ayvu"
             className="w-6 h-6 shrink-0"
           />

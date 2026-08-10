@@ -18,6 +18,7 @@ import RunDetailPage from "./pages/RunDetailPage";
 import MembersPage from "./pages/MembersPage";
 import SettingsPage from "./pages/SettingsPage";
 import ApiInstructionsPage from "./pages/ApiInstructionsPage";
+import SplashScreen from "./components/SplashScreen";
 
 function AuthGate({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -89,6 +90,12 @@ function WorkspaceRedirect() {
 }
 
 export default function App() {
+  const [showSplash, setShowSplash] = useState(true);
+
+  if (showSplash) {
+    return <SplashScreen onFinish={() => setShowSplash(false)} />;
+  }
+
   return (
     <BrowserRouter>
       <AuthProvider>

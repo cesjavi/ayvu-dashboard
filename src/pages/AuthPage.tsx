@@ -31,7 +31,7 @@ export default function AuthPage() {
         {/* Splash branding */}
         <div className="text-center mb-10 animate-fade-in">
           <img
-            src="/logoayvu.png"
+            src="/logoayvu.svg"
             alt="Ayvu"
             className="w-16 h-16 mx-auto mb-4"
           />
