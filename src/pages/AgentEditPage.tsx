@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import {
   ArrowLeft, Save, Info, Plus, Check, Trash2, SlidersHorizontal,
-  FileJson, Code,
+  FileJson,
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 

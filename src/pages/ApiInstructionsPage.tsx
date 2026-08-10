@@ -275,13 +275,13 @@ function AgentInstructionsPreview({ workspaceId }: { workspaceId: string }) {
 
       {instructions && (
         <div className="bg-surface border border-border rounded-md p-4 space-y-3">
-          {instructions.sample_request && (
+          {Boolean(instructions.sample_request) && (
             <>
               <h4 className="text-xs font-medium text-muted uppercase tracking-wider">Sample cURL (create run)</h4>
               <CodeBlock code={(instructions.sample_request as Record<string, unknown>).curl as string} />
             </>
           )}
-          {instructions.sample_response && (
+          {Boolean(instructions.sample_response) && (
             <>
               <h4 className="text-xs font-medium text-muted uppercase tracking-wider">Sample poll cURL</h4>
               <CodeBlock code={(instructions.sample_response as Record<string, unknown>).poll_curl as string} />
