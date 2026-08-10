@@ -1,6 +1,7 @@
 import { useState, useEffect, lazy, Suspense } from "react";
 import { useParams, Link } from "react-router-dom";
-import { ArrowLeft, Plus, Bot, Play, Clock, Trash2, GitBranch } from "lucide-react";
+import { ArrowLeft, Plus, Bot, Play, Clock, Trash2, GitBranch, AlertTriangle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../hooks/useAuth";
 import { formatDate, formatDuration } from "../lib/utils";
@@ -48,6 +49,7 @@ export default function ProjectDetailPage() {
     projectId: string;
   }>();
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [project, setProject] = useState<Project | null>(null);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [dependencies, setDependencies] = useState<DagDependency[]>([]);
@@ -55,8 +57,10 @@ export default function ProjectDetailPage() {
   const [params, setParams] = useState<ProjectParam[]>([]);
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [showDag, setShowDag] = useState(false);
   const [showRunModal, setShowRunModal] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     if (!projectId || !workspaceId) return;
@@ -204,6 +208,30 @@ export default function ProjectDetailPage() {
     setAgents(agents.filter((a) => a.id !== agentId));
   };
 
+  const handleDeleteProject = async () => {
+    if (!projectId || !project || deleting) return;
+    setDeleting(true);
+    try {
+      const { data, error: err } = await supabase.functions.invoke("delete-project", {
+        body: { projectId },
+      });
+
+      if (err || (data && !data.success)) {
+        console.error("Failed to delete project:", err ?? data);
+        setDeleting(false);
+        setShowDeleteConfirm(false);
+        return;
+      }
+
+      // Success – navigate back to the project list
+      navigate(`/workspace/${workspaceId}/projects`);
+    } catch (err) {
+      console.error("Failed to delete project:", err);
+      setDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
   const statusColor = (status: string) => {
     switch (status) {
       case "completed":
@@ -258,6 +286,13 @@ export default function ProjectDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            onClick={() => setShowDeleteConfirm(true)}
+            className="flex items-center gap-1.5 text-sm font-medium rounded-md px-3 py-2 text-muted hover:text-destructive hover:bg-destructive/10 border border-border transition-all duration-150 active:scale-[0.98] cursor-pointer"
+            title="Delete project"
+          >
+            <Trash2 size={16} />
+          </button>
           {agents.length > 0 && (
             <button
               onClick={() => setShowDag(!showDag)}
@@ -451,6 +486,67 @@ export default function ProjectDetailPage() {
           onClose={() => setShowRunModal(false)}
           loading={running}
         />
+      )}
+
+      {/* Delete confirmation modal */}
+      {showDeleteConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in"
+          onClick={() => !deleting && setShowDeleteConfirm(false)}
+        >
+          <div
+            className="bg-surface border border-border rounded-xl w-full max-w-md p-6 animate-pop-in"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-project-title"
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 shrink-0 rounded-full bg-destructive/10 flex items-center justify-center">
+                <AlertTriangle size={20} className="text-destructive" />
+              </div>
+              <div>
+                <h2
+                  id="delete-project-title"
+                  className="text-base font-heading font-semibold text-foreground"
+                >
+                  Delete "{project.name}"?
+                </h2>
+                <p className="text-sm text-muted mt-1.5">
+                  This will permanently delete the project along with its{" "}
+                  {agents.length > 0 && (
+                    <>
+                      {agents.length} agent{agents.length !== 1 ? "s" : ""},
+                    </>
+                  )}{" "}
+                  {runs.length > 0 && (
+                    <>
+                      {runs.length} run{runs.length !== 1 ? "s" : ""},
+                    </>
+                  )}{" "}
+                  and all related data. This action cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                disabled={deleting}
+                className="text-sm text-muted hover:text-foreground px-4 py-2 rounded-md transition-colors duration-150 disabled:opacity-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteProject}
+                disabled={deleting}
+                className="flex items-center gap-1.5 bg-destructive hover:bg-destructive/90 text-white text-sm font-medium rounded-md px-4 py-2 transition-all duration-150 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <Trash2 size={14} />
+                {deleting ? "Deleting…" : "Delete project"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

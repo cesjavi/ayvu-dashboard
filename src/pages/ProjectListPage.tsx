@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Plus, FolderKanban, Copy, Check } from "lucide-react";
+import { Plus, FolderKanban, Copy, Check, Trash2, AlertTriangle } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { formatDate, copyToClipboard } from "../lib/utils";
 
@@ -20,6 +20,8 @@ export default function ProjectListPage() {
   const [newDesc, setNewDesc] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Project | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!workspaceId) return;
@@ -60,6 +62,31 @@ export default function ProjectListPage() {
     setNewDesc("");
     setShowNew(false);
     setError(null);
+  };
+
+  const handleDeleteProject = async () => {
+    if (!deleteTarget || deleting) return;
+    setDeleting(true);
+    try {
+      const { data, error: err } = await supabase.functions.invoke("delete-project", {
+        body: { projectId: deleteTarget.id },
+      });
+
+      if (err || (data && !data.success)) {
+        console.error("Failed to delete project:", err ?? data);
+        setDeleting(false);
+        setDeleteTarget(null);
+        return;
+      }
+
+      setProjects(projects.filter((p) => p.id !== deleteTarget.id));
+      setDeleting(false);
+      setDeleteTarget(null);
+    } catch (err) {
+      console.error("Failed to delete project:", err);
+      setDeleting(false);
+      setDeleteTarget(null);
+    }
   };
 
   return (
@@ -180,9 +207,71 @@ export default function ProjectListPage() {
                     <Copy size={12} />
                   )}
                 </button>
+                <button
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setDeleteTarget(project);
+                  }}
+                  className="text-muted/40 hover:text-destructive transition-colors duration-150 cursor-pointer opacity-0 group-hover:opacity-100"
+                  title="Delete project"
+                >
+                  <Trash2 size={12} />
+                </button>
               </div>
             </Link>
           ))}
+        </div>
+      )}
+
+      {/* Delete confirmation modal */}
+      {deleteTarget && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-fade-in"
+          onClick={() => !deleting && setDeleteTarget(null)}
+        >
+          <div
+            className="bg-surface border border-border rounded-xl w-full max-w-md p-6 animate-pop-in"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="delete-project-list-title"
+          >
+            <div className="flex items-start gap-4">
+              <div className="w-10 h-10 shrink-0 rounded-full bg-destructive/10 flex items-center justify-center">
+                <AlertTriangle size={20} className="text-destructive" />
+              </div>
+              <div>
+                <h2
+                  id="delete-project-list-title"
+                  className="text-base font-heading font-semibold text-foreground"
+                >
+                  Delete "{deleteTarget.name}"?
+                </h2>
+                <p className="text-sm text-muted mt-1.5">
+                  This will permanently delete the project along with all its
+                  agents, runs, and related data. This action cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-6">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                disabled={deleting}
+                className="text-sm text-muted hover:text-foreground px-4 py-2 rounded-md transition-colors duration-150 disabled:opacity-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteProject}
+                disabled={deleting}
+                className="flex items-center gap-1.5 bg-destructive hover:bg-destructive/90 text-white text-sm font-medium rounded-md px-4 py-2 transition-all duration-150 active:scale-[0.98] disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              >
+                <Trash2 size={14} />
+                {deleting ? "Deleting…" : "Delete project"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
