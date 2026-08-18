@@ -16,7 +16,7 @@ const svgImportPlugin = () => ({
 });
 
 // https://vite.dev/config/
-export default defineConfig(() => ({
+export default defineConfig({
   plugins: [
     react(),
     tailwindcss(),
@@ -35,10 +35,9 @@ export default defineConfig(() => ({
   ],
   server: {
     host: true,
-    allowedHosts: true as const,
-    hmr: false,
+    allowedHosts: true,
     watch: {
       usePolling: true,
     },
   },
-}))
+})
