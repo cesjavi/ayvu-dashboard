@@ -39,7 +39,7 @@ const PROVIDER_COLORS: Record<string, string> = {
   groq: "border-l-purple-500",
 };
 
-const SUPABASE_URL = "https://qeihnzhmyiinbwqhdqji.supabase.co";
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
 
 export default function SettingsPage() {
   const { workspaceId } = useParams();

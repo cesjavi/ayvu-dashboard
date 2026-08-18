@@ -1,10 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 
-const supabaseUrl = "https://qeihnzhmyiinbwqhdqji.supabase.co";
-const supabaseAnonKey =
-  "sb_publishable__Y2_lPNVW_zJhmCcYC_pDA_lFsM6Dui";
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+export const supabase = createClient(supabaseUrl!, supabaseAnonKey!, {
   auth: {
     flowType: "implicit",
     detectSessionInUrl: true,
